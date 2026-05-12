@@ -254,6 +254,59 @@
 
       drawWaveform(audioBuffer);
 
+      const wavBlob = audioBufferToWav(audioBuffer);
+      const wavURL = URL.createObjectURL(wavBlob);
+
+      player.src = wavURL;
+      player.load();
+      player.play();
+
+      function audioBufferToWav(buffer) {
+      const numOfChannels = 1;
+      const sampleRate = buffer.sampleRate;
+      const format = 1;
+      const bitDepth = 16;
+
+      const channelData = buffer.getChannelData(0);
+      const blockAlign = numOfChannels * bitDepth / 8;
+      const byteRate = sampleRate * blockAlign;
+      const dataSize = channelData.length * blockAlign;
+
+      const wavBuffer = new ArrayBuffer(44 + dataSize);
+      const view = new DataView(wavBuffer);
+
+      writeString(view, 0, 'RIFF');
+      view.setUint32(4, 36 + dataSize, true);
+      writeString(view, 8, 'WAVE');
+      writeString(view, 12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, format, true);
+      view.setUint16(22, numOfChannels, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, byteRate, true);
+      view.setUint16(32, blockAlign, true);
+      view.setUint16(34, bitDepth, true);
+      writeString(view, 36, 'data');
+      view.setUint32(40, dataSize, true);
+
+      let offset = 44;
+
+      for (let i = 0; i < channelData.length; i++) {
+        let sample = Math.max(-1, Math.min(1, channelData[i]));
+        sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+        view.setInt16(offset, sample, true);
+        offset += 2;
+      }
+
+      return new Blob([view], { type: 'audio/wav' });
+    }
+
+    function writeString(view, offset, string) {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    }
+
       statusText.innerText = 'Audio Datamoshed';
     };
 
