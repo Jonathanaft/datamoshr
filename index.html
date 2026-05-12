@@ -1,0 +1,269 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Datamoshr</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-black text-white min-h-screen overflow-hidden">
+  <div class="absolute inset-0 bg-gradient-to-br from-fuchsia-950 via-black to-cyan-950"></div>
+
+  <main class="relative z-10 max-w-7xl mx-auto px-6 py-10">
+    <header class="mb-10 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+      <div>
+        <p class="uppercase tracking-[0.4em] text-cyan-400 text-xs mb-3">
+          Experimental Audio Datamoshing
+        </p>
+        <h1 class="text-6xl md:text-7xl font-black tracking-tight">
+          DATAMOSHR
+        </h1>
+        <p class="text-zinc-400 mt-4 max-w-2xl text-lg">
+          Upload audio. Corrupt tiny segments. Create glitched soundscapes inspired by datamoshing aesthetics.
+        </p>
+      </div>
+
+      <div class="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-5 w-full lg:w-80 backdrop-blur-xl">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-zinc-400 text-sm">Status</span>
+          <div id="statusDot" class="w-3 h-3 rounded-full bg-red-500"></div>
+        </div>
+        <div id="statusText" class="text-xl font-bold">No Audio Loaded</div>
+      </div>
+    </header>
+
+    <section class="grid lg:grid-cols-[1.4fr_0.6fr] gap-8">
+      <div class="bg-zinc-950/70 border border-zinc-800 rounded-[2rem] p-6 shadow-2xl">
+        <div id="dropzone" class="border-2 border-dashed border-zinc-700 rounded-3xl p-12 text-center hover:border-cyan-400 transition-all duration-300 cursor-pointer">
+          <input type="file" id="audioFile" accept="audio/*" class="hidden" />
+
+          <div class="text-7xl mb-4">◉</div>
+          <h2 class="text-3xl font-black mb-3">Drop Audio Here</h2>
+          <p class="text-zinc-500 mb-6">MP3 · WAV · OGG · FLAC</p>
+
+          <button id="uploadBtn" class="bg-cyan-400 text-black px-8 py-4 rounded-2xl font-black hover:bg-cyan-300 transition-all">
+            Upload Audio
+          </button>
+        </div>
+
+        <div class="mt-8">
+          <div class="flex justify-between mb-3">
+            <span class="text-zinc-400">Waveform</span>
+            <span id="timeLabel" class="text-cyan-400">0:00</span>
+          </div>
+
+          <div class="relative bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
+            <canvas id="waveCanvas" width="1400" height="260" class="w-full h-64"></canvas>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-4 mt-8">
+          <button id="playBtn" disabled class="bg-white text-black px-6 py-3 rounded-2xl font-black disabled:opacity-30">
+            ▶ Play
+          </button>
+
+          <button id="glitchBtn" disabled class="bg-fuchsia-500 px-6 py-3 rounded-2xl font-black disabled:opacity-30">
+            Datamosh Segment
+          </button>
+
+          <button id="exportBtn" disabled class="bg-zinc-800 border border-zinc-700 px-6 py-3 rounded-2xl font-black disabled:opacity-30">
+            Export
+          </button>
+        </div>
+      </div>
+
+      <aside class="space-y-6">
+        <div class="bg-zinc-950/70 border border-zinc-800 rounded-[2rem] p-6">
+          <h3 class="text-2xl font-black mb-6">Controls</h3>
+
+          <div class="space-y-6">
+            <div>
+              <div class="flex justify-between mb-2">
+                <span>Glitch Intensity</span>
+                <span id="intensityLabel" class="text-cyan-400">40%</span>
+              </div>
+              <input id="intensity" type="range" min="1" max="100" value="40" class="w-full accent-cyan-400" />
+            </div>
+
+            <div>
+              <div class="flex justify-between mb-2">
+                <span>Repeat Chaos</span>
+                <span id="repeatLabel" class="text-fuchsia-400">20%</span>
+              </div>
+              <input id="repeat" type="range" min="0" max="100" value="20" class="w-full accent-fuchsia-500" />
+            </div>
+
+            <div>
+              <div class="flex justify-between mb-2">
+                <span>Bitcrush</span>
+                <span id="crushLabel" class="text-yellow-400">6 bit</span>
+              </div>
+              <input id="crush" type="range" min="2" max="16" value="6" class="w-full accent-yellow-400" />
+            </div>
+          </div>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <audio id="player"></audio>
+
+  <script>
+    const uploadBtn = document.getElementById('uploadBtn');
+    const audioFile = document.getElementById('audioFile');
+    const dropzone = document.getElementById('dropzone');
+    const canvas = document.getElementById('waveCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const playBtn = document.getElementById('playBtn');
+    const glitchBtn = document.getElementById('glitchBtn');
+    const exportBtn = document.getElementById('exportBtn');
+
+    const player = document.getElementById('player');
+
+    const intensity = document.getElementById('intensity');
+    const repeat = document.getElementById('repeat');
+    const crush = document.getElementById('crush');
+
+    const intensityLabel = document.getElementById('intensityLabel');
+    const repeatLabel = document.getElementById('repeatLabel');
+    const crushLabel = document.getElementById('crushLabel');
+
+    const statusText = document.getElementById('statusText');
+    const statusDot = document.getElementById('statusDot');
+
+    let audioContext;
+    let audioBuffer;
+    let selectedX = 0;
+
+    uploadBtn.onclick = () => audioFile.click();
+    dropzone.onclick = () => audioFile.click();
+
+    intensity.oninput = () => {
+      intensityLabel.innerText = intensity.value + '%';
+    };
+
+    repeat.oninput = () => {
+      repeatLabel.innerText = repeat.value + '%';
+    };
+
+    crush.oninput = () => {
+      crushLabel.innerText = crush.value + ' bit';
+    };
+
+    audioFile.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const url = URL.createObjectURL(file);
+      player.src = url;
+
+      audioContext = new AudioContext();
+      const arrayBuffer = await file.arrayBuffer();
+      audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+      drawWaveform(audioBuffer);
+
+      playBtn.disabled = false;
+      glitchBtn.disabled = false;
+      exportBtn.disabled = false;
+
+      statusText.innerText = file.name;
+      statusDot.classList.remove('bg-red-500');
+      statusDot.classList.add('bg-green-400');
+    });
+
+    function drawWaveform(buffer) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const data = buffer.getChannelData(0);
+      const step = Math.ceil(data.length / canvas.width);
+      const amp = canvas.height / 2;
+
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#22d3ee';
+      ctx.beginPath();
+
+      for (let i = 0; i < canvas.width; i++) {
+        let min = 1.0;
+        let max = -1.0;
+
+        for (let j = 0; j < step; j++) {
+          const datum = data[(i * step) + j];
+          if (datum < min) min = datum;
+          if (datum > max) max = datum;
+        }
+
+        ctx.moveTo(i, (1 + min) * amp);
+        ctx.lineTo(i, (1 + max) * amp);
+      }
+
+      ctx.stroke();
+    }
+
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      selectedX = e.clientX - rect.left;
+
+      ctx.fillStyle = '#ff00ff';
+      ctx.fillRect(selectedX - 2, 0, 4, canvas.height);
+    });
+
+    playBtn.onclick = () => {
+      if (player.paused) {
+        player.play();
+        playBtn.innerText = '❚❚ Pause';
+      } else {
+        player.pause();
+        playBtn.innerText = '▶ Play';
+      }
+    };
+
+    glitchBtn.onclick = async () => {
+      if (!audioBuffer) return;
+
+      const channel = audioBuffer.getChannelData(0);
+
+      const start = Math.floor((selectedX / canvas.width) * channel.length);
+      const size = Math.floor(8000 * (intensity.value / 100));
+
+      for (let i = 0; i < size; i++) {
+        const index = start + i;
+
+        if (index < channel.length) {
+          const repeatChance = repeat.value / 100;
+
+          if (Math.random() < repeatChance && index - 100 > 0) {
+            channel[index] = channel[index - 100];
+          }
+
+          const crushDepth = parseInt(crush.value);
+          const step = Math.pow(0.5, crushDepth);
+
+          channel[index] = Math.round(channel[index] / step) * step;
+
+          if (Math.random() < 0.08) {
+            channel[index] *= -1;
+          }
+        }
+      }
+
+      drawWaveform(audioBuffer);
+
+      statusText.innerText = 'Audio Datamoshed';
+    };
+
+    exportBtn.onclick = () => {
+      const a = document.createElement('a');
+      a.href = player.src;
+      a.download = 'datamoshr-glitch.wav';
+      a.click();
+    };
+  </script>
+</body>
+</html>
+```
