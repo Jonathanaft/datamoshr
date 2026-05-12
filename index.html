@@ -58,24 +58,25 @@
           </div>
         </div>
 
-        <div class="flex flex-wrap gap-4 mt-8">
-          <button id="playBtn" disabled class="bg-white text-black px-6 py-3 rounded-2xl font-black disabled:opacity-30">
-            ▶ Play
-          </button>
-
-          <button id="glitchBtn" disabled class="bg-fuchsia-500 px-6 py-3 rounded-2xl font-black disabled:opacity-30">
-            Datamosh Segment
-          </button>
-
-          <button id="exportBtn" disabled class="bg-zinc-800 border border-zinc-700 px-6 py-3 rounded-2xl font-black disabled:opacity-30">
-            Export
-          </button>
         </div>
-      </div>
 
       <aside class="space-y-6">
         <div class="bg-zinc-950/70 border border-zinc-800 rounded-[2rem] p-6">
           <h3 class="text-2xl font-black mb-6">Controls</h3>
+
+          <div class="flex flex-col gap-3 mb-8">
+            <button id="playBtn" disabled class="bg-white text-black px-6 py-3 rounded-2xl font-black disabled:opacity-30">
+              ▶ Play
+            </button>
+
+            <button id="glitchBtn" disabled class="bg-fuchsia-500 px-6 py-3 rounded-2xl font-black disabled:opacity-30">
+              Datamosh Segment
+            </button>
+
+            <button id="exportBtn" disabled class="bg-zinc-800 border border-zinc-700 px-6 py-3 rounded-2xl font-black disabled:opacity-30">
+              Export
+            </button>
+          </div>
 
           <div class="space-y-6">
             <div>
@@ -206,11 +207,18 @@
     }
 
     canvas.addEventListener('click', (e) => {
+      if (!audioBuffer) return;
+
       const rect = canvas.getBoundingClientRect();
       selectedX = e.clientX - rect.left;
 
+      drawWaveform(audioBuffer);
+
       ctx.fillStyle = '#ff00ff';
       ctx.fillRect(selectedX - 2, 0, 4, canvas.height);
+
+      const seconds = ((selectedX / canvas.width) * audioBuffer.duration).toFixed(2);
+      statusText.innerText = `Selected glitch point: ${seconds}s`;
     });
 
     playBtn.onclick = () => {
@@ -224,11 +232,15 @@
     };
 
     glitchBtn.onclick = async () => {
+      if (selectedX === 0) {
+        alert('Click somewhere on the waveform first to choose a glitch segment.');
+        return;
+      }
       if (!audioBuffer) return;
 
       const channel = audioBuffer.getChannelData(0);
 
-      const start = Math.floor((selectedX / canvas.width) * channel.length);
+      const start = Math.max(0, Math.floor((selectedX / canvas.width) * channel.length));
       const size = Math.floor(8000 * (intensity.value / 100));
 
       for (let i = 0; i < size; i++) {
