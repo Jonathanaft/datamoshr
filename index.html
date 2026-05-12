@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DATAMOSHR</title>
+  <title>Datamoshr</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-black text-white min-h-screen overflow-x-hidden">
@@ -143,6 +143,9 @@
     let audioContext;
     let audioBuffer;
     let selectedX = 0;
+    let selectedWidth = 120;
+    let isDragging = false;
+    let dragStart = 0;
 
     uploadBtn.onclick = () => audioFile.click();
     dropzone.onclick = () => audioFile.click();
@@ -212,19 +215,44 @@
       ctx.stroke();
     }
 
-    canvas.addEventListener('click', (e) => {
+    canvas.addEventListener('mousedown', (e) => {
       if (!audioBuffer) return;
 
       const rect = canvas.getBoundingClientRect();
-      selectedX = e.clientX - rect.left;
+      dragStart = e.clientX - rect.left;
+      selectedX = dragStart;
+      selectedWidth = 0;
+      isDragging = true;
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (!isDragging || !audioBuffer) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const currentX = e.clientX - rect.left;
+
+      selectedWidth = Math.abs(currentX - dragStart);
+      selectedX = Math.min(currentX, dragStart);
 
       drawWaveform(audioBuffer);
 
+      ctx.fillStyle = 'rgba(255, 0, 255, 0.35)';
+      ctx.fillRect(selectedX, 0, selectedWidth, canvas.height);
+
       ctx.fillStyle = '#ff00ff';
       ctx.fillRect(selectedX - 2, 0, 4, canvas.height);
+      ctx.fillRect(selectedX + selectedWidth - 2, 0, 4, canvas.height);
+    });
 
-      const seconds = ((selectedX / canvas.width) * audioBuffer.duration).toFixed(2);
-      statusText.innerText = `Selected glitch point: ${seconds}s`;
+    canvas.addEventListener('mouseup', () => {
+      if (!audioBuffer) return;
+
+      isDragging = false;
+
+      const startSeconds = ((selectedX / canvas.width) * audioBuffer.duration).toFixed(2);
+      const endSeconds = (((selectedX + selectedWidth) / canvas.width) * audioBuffer.duration).toFixed(2);
+
+      statusText.innerText = `Selected glitch region: ${startSeconds}s → ${endSeconds}s`;
     });
 
     playBtn.onclick = () => {
@@ -238,7 +266,7 @@
     };
 
     glitchBtn.onclick = async () => {
-      if (selectedX === 0) {
+      if (selectedWidth <= 5) {
         alert('Click somewhere on the waveform first to choose a glitch segment.');
         return;
       }
@@ -247,7 +275,8 @@
       const channel = audioBuffer.getChannelData(0);
 
       const start = Math.max(0, Math.floor((selectedX / canvas.width) * channel.length));
-      const size = Math.floor(8000 * (intensity.value / 100));
+      const end = Math.floor(((selectedX + selectedWidth) / canvas.width) * channel.length);
+      const size = Math.max(1, end - start);
 
       for (let i = 0; i < size; i++) {
         const index = start + i;
